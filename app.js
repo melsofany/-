@@ -33,7 +33,7 @@ app.get("/", async (req, res) => {
     }
     const rows = await sheet.getRows();
     const filteredTasks = rows
-      .filter(row => row["Technical Name"] && row["Technical Name"].trim() === empName.trim())
+      .filter(row => row["Assigned Employee"] && row["Assigned Employee"].trim() === empName.trim())
       .map(row => ({
         RFQ: row["RFQ"] || "", RequestDate: row["Request Date"] || "", ResDate: row["RES DATE"] || "",
         LineItem: row["LINEITEM"] || "", PartNo: row["PART NO"] || "", Description: row["Description"] || "",
