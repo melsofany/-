@@ -7,10 +7,15 @@ const PORT = process.env.PORT || 8080;
 
 // --- قراءة الإعدادات من متغيرات البيئة ---
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
-const SHEET_NAME = process.env.SHEET_NAME || "data"; // اسم الشيت المصدر
-const CREDENTIALS = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+const SHEET_NAME = process.env.SHEET_NAME || "data";
 
-// دالة مساعدة ذكية لجلب القيمة بغض النظر عن حالة الأحرف أو المسافات
+// --- **هذا هو الجزء المهم: معالجة "كلمة المرور" المشفرة** ---
+const ENCODED_CREDENTIALS = process.env.GOOGLE_SERVICE_ACCOUNT_BASE64;
+const DECODED_CREDENTIALS = Buffer.from(ENCODED_CREDENTIALS, 'base64').toString('utf-8');
+const CREDENTIALS = JSON.parse(DECODED_CREDENTIALS);
+// ----------------------------------------------------------------
+
+// دالة مساعدة ذكية لجلب القيمة
 function getSafeValue(row, headerName) {
     const header = row._sheet.headerValues.find(h => h.trim().toLowerCase() === headerName.trim().toLowerCase());
     return header ? (row[header] || "") : "";
@@ -19,7 +24,7 @@ function getSafeValue(row, headerName) {
 app.get("/", async (req, res) => {
   const empName = req.query.empName;
   if (!empName) {
-    return res.status(400).json({ error: "Employee name not provided. Use ?empName=NAME" });
+    return res.status(400).json({ error: "Employee name not provided." });
   }
   try {
     const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
@@ -34,17 +39,13 @@ app.get("/", async (req, res) => {
     const filteredTasks = rows
       .filter(row => getSafeValue(row, "Assigned Employee").trim() === empName.trim())
       .map(row => ({
-        // --- **هذا هو التعديل الرئيسي والمهم** ---
-        // الجهة اليمنى: الأسماء كما هي في شيت "data"
-        // الجهة اليسرى: الأسماء التي سيفهمها الإكسيل (شيت "Tasks")
-        
         RFQ:          getSafeValue(row, "RFQ"),
-        RequestDate:  getSafeValue(row, "(DATE/ RFQ)"), // اسم العمود في شيت data
-        ResDate:      getSafeValue(row, "RES. DATE"),   // اسم العمود في شيت data
-        LineItem:     getSafeValue(row, "LINE ITEM"),   // اسم العمود في شيت data
-        PartNo:       getSafeValue(row, "PART NO"),     // اسم العمود في شيت data
-        Description:  getSafeValue(row, "DESCREPTION"), // اسم العمود في شيت data
-        Qty:          getSafeValue(row, "QTY/")         // اسم العمود في شيت data
+        RequestDate:  getSafeValue(row, "(DATE/ RFQ)"),
+        ResDate:      getSafeValue(row, "RES. DATE"),
+        LineItem:     getSafeValue(row, "LINE ITEM"),
+        PartNo:       getSafeValue(row, "PART NO"),
+        Description:  getSafeValue(row, "DESCREPTION"),
+        Qty:          getSafeValue(row, "QTY/")
       }));
       
     res.status(200).json(filteredTasks);
