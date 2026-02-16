@@ -7,16 +7,14 @@ const PORT = process.env.PORT || 8080;
 
 // --- قراءة الإعدادات من متغيرات البيئة ---
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
-const SHEET_NAME = process.env.SHEET_NAME || "data";
+const SHEET_NAME = process.env.SHEET_NAME || "data"; // اسم الشيت المصدر
+const CREDENTIALS = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
 
-// --- معالجة "كلمة المرور" المشفرة ---
-// 1. قراءة النص المشفر Base64 من متغيرات البيئة
-const ENCODED_CREDENTIALS = process.env.GOOGLE_SERVICE_ACCOUNT_BASE64;
-// 2. فك تشفير النص للحصول على JSON الأصلي
-const DECODED_CREDENTIALS = Buffer.from(ENCODED_CREDENTIALS, 'base64').toString('utf-8');
-// 3. تحويل النص إلى كائن JSON جاهز للاستخدام
-const CREDENTIALS = JSON.parse(DECODED_CREDENTIALS);
-// -----------------------------------------
+// دالة مساعدة ذكية لجلب القيمة بغض النظر عن حالة الأحرف أو المسافات
+function getSafeValue(row, headerName) {
+    const header = row._sheet.headerValues.find(h => h.trim().toLowerCase() === headerName.trim().toLowerCase());
+    return header ? (row[header] || "") : "";
+}
 
 app.get("/", async (req, res) => {
   const empName = req.query.empName;
@@ -25,7 +23,7 @@ app.get("/", async (req, res) => {
   }
   try {
     const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
-    await doc.useServiceAccountAuth(CREDENTIALS); // استخدام الكائن بعد فك التشفير
+    await doc.useServiceAccountAuth(CREDENTIALS);
     await doc.loadInfo();
     const sheet = doc.sheetsByTitle[SHEET_NAME];
     if (!sheet) {
@@ -33,17 +31,20 @@ app.get("/", async (req, res) => {
     }
     const rows = await sheet.getRows();
     
-    // --- **هذا هو السطر الذي تم تعديله باسم العمود الصحيح** ---
     const filteredTasks = rows
-      .filter(row => row["Assigned Employee"] && row["Assigned Employee"].trim() === empName.trim())
+      .filter(row => getSafeValue(row, "Assigned Employee").trim() === empName.trim())
       .map(row => ({
-        RFQ: row["RFQ"] || "",
-        RequestDate: row["Request Date"] || "",
-        ResDate: row["RES DATE"] || "",
-        LineItem: row["LINEITEM"] || "",
-        PartNo: row["PART NO"] || "",
-        Description: row["Description"] || "",
-        Qty: row["QTY"] || ""
+        // --- **هذا هو التعديل الرئيسي والمهم** ---
+        // الجهة اليمنى: الأسماء كما هي في شيت "data"
+        // الجهة اليسرى: الأسماء التي سيفهمها الإكسيل (شيت "Tasks")
+        
+        RFQ:          getSafeValue(row, "RFQ"),
+        RequestDate:  getSafeValue(row, "(DATE/ RFQ)"), // اسم العمود في شيت data
+        ResDate:      getSafeValue(row, "RES. DATE"),   // اسم العمود في شيت data
+        LineItem:     getSafeValue(row, "LINE ITEM"),   // اسم العمود في شيت data
+        PartNo:       getSafeValue(row, "PART NO"),     // اسم العمود في شيت data
+        Description:  getSafeValue(row, "DESCREPTION"), // اسم العمود في شيت data
+        Qty:          getSafeValue(row, "QTY/")         // اسم العمود في شيت data
       }));
       
     res.status(200).json(filteredTasks);
